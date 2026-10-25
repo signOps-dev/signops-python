@@ -5,7 +5,7 @@ SignOps for Python: push notifications to Android, iOS and the web, push approva
 Not on PyPI yet. Until it is, install from this repository:
 
 ```sh
-pip install git+https://github.com/rushi-pa/signops-python
+pip install git+https://github.com/signops-dev/signops-python
 ```
 
 ```python

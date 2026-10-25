@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "signops"
-version = "0.1.0"
+version = "0.2.0"
 description = "SignOps for Python: push notifications to Android, iOS and the web, push approval of logins, passkeys and webhooks."
 readme = "README.md"
 requires-python = ">=3.9"
@@ -16,3 +16,5 @@ keywords = ["push notifications", "fcm", "apns", "web push", "passkeys", "webaut
 [project.urls]
 Homepage = "https://signops.dev/"
 Documentation = "https://signops.dev/docs/"
+Repository = "https://github.com/signops-dev/signops-python"
+Issues = "https://github.com/signops-dev/signops-python/issues"

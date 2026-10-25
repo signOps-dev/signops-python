@@ -21,7 +21,7 @@ import urllib.parse
 import urllib.request
 from typing import Any, Dict, List, Optional, Union
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 __all__ = ["SignOps", "SignOpsError", "Obj"]
 
 
@@ -76,7 +76,10 @@ class SignOps:
         self.templates = _Templates(self)
         self.approve = _Approve(self)
         self.passkeys = _Passkeys(self)
+        self.totp = _Totp(self)
+        self.users = _Users(self)
         self.otp = _Otp(self)
+        self.magic_links = _MagicLinks(self)
         self.webhooks = _Webhooks(self)
 
     def request(self, method: str, path: str, body: Optional[Dict[str, Any]] = None, idempotency_key: Optional[str] = None, timeout: Optional[float] = None) -> Any:
@@ -98,7 +101,8 @@ class SignOps:
                     j = json.loads(e.read() or b"{}")
                 except ValueError:
                     j = {}
-                if (e.code == 429 or e.code >= 500) and attempt < self._retries:
+                # A locked user stays locked for minutes: retrying would only wait, so it is raised at once.
+                if (e.code == 429 or e.code >= 500) and (j.get("error") or {}).get("code") != "user_locked" and attempt < self._retries:
                     wait = float(e.headers.get("Retry-After") or 0) or 0.5 * 2 ** attempt
                     time.sleep(min(wait, 10) + random.random() * 0.1)
                     continue
@@ -235,6 +239,58 @@ class _Passkeys:
         return self._s.request("DELETE", f"/v1/passkeys/{_q(id)}")
 
 
+class _Totp:
+    """Authenticator app codes. Wrong codes count toward the user's lock: a locked user raises SignOpsError with code user_locked."""
+    def __init__(self, s: SignOps):
+        self._s = s
+
+    def enroll(self, user_id: str, label: Optional[str] = None, issuer: Optional[str] = None) -> Obj:
+        """Starts enrolment. Show qr_svg (or secret) to the user; nothing works until confirm."""
+        return self._s.request("POST", "/v1/totp/enroll", {"user_id": user_id, "label": label, "issuer": issuer})
+
+    def confirm(self, user_id: str, code: str) -> Obj:
+        """The first code from the app. Returns the 10 backup codes, shown to the user once."""
+        return self._s.request("POST", "/v1/totp/confirm", {"user_id": user_id, "code": code})
+
+    def verify(self, user_id: str, code: str) -> Obj:
+        """A 6-digit code or a backup code. Each works once."""
+        return self._s.request("POST", "/v1/totp/verify", {"user_id": user_id, "code": code})
+
+    def backup_codes(self, user_id: str) -> Obj:
+        return self._s.request("POST", "/v1/totp/backup-codes", {"user_id": user_id})
+
+    def status(self, user_id: str) -> Obj:
+        return self._s.request("GET", f"/v1/users/{_q(user_id)}/totp")
+
+    def remove(self, user_id: str) -> Obj:
+        return self._s.request("DELETE", f"/v1/users/{_q(user_id)}/totp")
+
+
+class _Users:
+    def __init__(self, s: SignOps):
+        self._s = s
+
+    def delete(self, user_id: str) -> Obj:
+        """Erases everything held under the user id (DPDP Act). Answers with what was removed."""
+        return self._s.request("DELETE", f"/v1/users/{_q(user_id)}")
+
+    def export(self, user_id: str) -> Obj:
+        """Everything SignOps holds on the user, as one document."""
+        return self._s.request("GET", f"/v1/users/{_q(user_id)}/export")
+
+    def record_consent(self, user_id: str, purpose: str, granted: bool, source: Optional[str] = None, text: Optional[str] = None) -> Obj:
+        return self._s.request("POST", f"/v1/users/{_q(user_id)}/consent", {"purpose": purpose, "granted": granted, "source": source, "text": text})
+
+    def consent(self, user_id: str) -> Obj:
+        return self._s.request("GET", f"/v1/users/{_q(user_id)}/consent")
+
+    def lock(self, user_id: str) -> Obj:
+        return self._s.request("GET", f"/v1/users/{_q(user_id)}/lock")
+
+    def unlock(self, user_id: str) -> Obj:
+        return self._s.request("DELETE", f"/v1/users/{_q(user_id)}/lock")
+
+
 class _Otp:
     def __init__(self, s: SignOps):
         self._s = s
@@ -244,6 +300,22 @@ class _Otp:
 
     def verify(self, otp_id: str, code: str) -> Obj:
         return self._s.request("POST", "/v1/otp/verify", dict(otp_id=otp_id, code=code))
+
+
+class _MagicLinks:
+    """Sign-in links by email. The link opens redirect_url with ?signops_token= added; pass that token to verify, once."""
+
+    def __init__(self, s: SignOps):
+        self._s = s
+
+    def send(self, email: str, redirect_url: str, app_name: Optional[str] = None, language: Optional[str] = None, ip: Optional[str] = None) -> Obj:
+        return self._s.request("POST", "/v1/magic-links", dict(email=email, redirect_url=redirect_url, app_name=app_name, language=language, ip=ip))
+
+    def verify(self, token: str) -> Obj:
+        return self._s.request("POST", "/v1/magic-links/verify", dict(token=token))
+
+    def get(self, link_id: str) -> Obj:
+        return self._s.request("GET", f"/v1/magic-links/{_q(link_id)}")
 
 
 class _Webhooks:
