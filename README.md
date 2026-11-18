@@ -1,11 +1,9 @@
 # signops
 
-SignOps for Python: push notifications to Android, iOS and the web, push approval of logins, passkeys and webhooks, on one API key and your own user ids. Website: https://signops.dev. Docs: https://signops.dev/docs/
-
-Not on PyPI yet. Until it is, install from this repository:
+[SignOps](https://signops.dev) for Python: push notifications to Android, iOS and the web, push approval of logins, passkeys and webhooks, on one API key and your own user ids. Docs: https://signops.dev/docs/
 
 ```sh
-pip install git+https://github.com/signops-dev/signops-python
+pip install signops
 ```
 
 ```python
